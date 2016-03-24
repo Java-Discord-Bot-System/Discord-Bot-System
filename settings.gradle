@@ -1,0 +1,25 @@
+rootProject.name = 'Discord Bot System'
+
+File jda = new File(rootDir, "JDA")
+
+if (jda.exists()) {
+	include "JDA"
+	
+	File core = new File(rootDir, "Core")
+	
+	if (core.exists()) {
+		include "Core"
+		
+		List<String> files = rootDir.listFiles().findAll { it.isDirectory() && (it.getName().startsWith("Plugin ")) }.collect {it.getName()};
+
+		println "Found " +files.size()+" Plugins: " + files
+
+		include files.toArray(new java.lang.String[files.size()])
+
+		File template = new File(rootDir, "Template")
+	
+		if (template.exists()) {
+			include "Template"
+		}
+	}
+}
