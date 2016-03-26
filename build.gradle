@@ -15,6 +15,9 @@ task wrapper(type: Wrapper) {
 subprojects {
 	apply plugin: 'java'
 
+	sourceCompatibility = 1.8
+	targetCompatibility = 1.8
+
 	repositories {
 		 jcenter()
 	}
@@ -28,7 +31,47 @@ subprojects {
 	jar {
 		manifest.attributes provider: 'gradle'
 	}
+	
+	configurations{
+ 		providedCompile
+ 		compile.extendsFrom providedCompile
+	}
+  	dependencies{
+ 		providedCompile files('server/lib/weblogic.jar');
+ 	}
+	
+	task exportDependencies (type: Copy){
+		if (project.name.startsWith("Plugin ")) {
+			dependsOn build
+			File directory = new File(projectDir.getParentFile(), "export/plugins/"+ project.name.replaceFirst("Plugin ", "")+"/lib/")
+			into directory
+			from (configurations.runtime - project(":Core").configurations.runtime).exclude project(":Core").jar.outputs.files.getFiles().collect {it.getName()}
+		}
+	}
+	
+	task exportJar (type: Copy){
+		if (project.name.startsWith("Plugin ")) {
+			dependsOn build, exportDependencies
+			File directory = new File(projectDir.getParentFile(), "export/plugins/"+ project.name.replaceFirst("Plugin ", ""))
+			new File(directory, "Plugin.jar").delete()
+			into directory
+			from (project.jar.outputs.files.getFiles()) {
+				rename {"Plugin.jar"}
+			}
+		}
+	}
+	
+	task export (type: Copy){
+		if (project.name.startsWith("Plugin ")) {
+			dependsOn exportJar, exportDependencies
+		}
+	}
 }
+
+task export() {
+	
+}
+
 
 task setupWorkspace << {
 	java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newCachedThreadPool();
@@ -44,7 +87,6 @@ task setupWorkspace << {
 	}
 
 	boolean downloadPlugins = Boolean.valueOf(downloadPluginsProp)
-
 	if (downloadPlugins) {
 		println "Searching for plugins..."
 		org.kohsuke.github.GitHub github = org.kohsuke.github.GitHub.connectAnonymously();
