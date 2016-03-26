@@ -76,6 +76,15 @@ task export() {
 	
 }
 
+task cleanExport() {
+	File exportDir = new File(rootDir, "export/")
+	File pluginsDir = new File(exportDir, "plugins/")
+	File libDir = new File(exportDir, "lib/") 
+	File botsystemJar = new File(exportDir, "Bot System.jar")
+	pluginsDir.delete()
+	libDir.delete()
+	botsystemJar.delete()
+}
 
 task setupWorkspace << {
 	ExecutorService executor = Executors.newCachedThreadPool()
@@ -125,7 +134,7 @@ Runnable cloneRepository(String url, File directory){
 	return {
 		directory.delete()
 		try {
-			Git.cloneRepository().with { directory = directory; URI = url; delegate}.call().repository.close()
+			Git.cloneRepository().with { directory = directory; setURI(url); delegate}.call().repository.close()
 		} catch (org.eclipse.jgit.api.errors.GitAPIException e) {
 			e.printStackTrace()
 		}
