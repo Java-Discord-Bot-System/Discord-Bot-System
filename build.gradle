@@ -1,3 +1,7 @@
+import java.util.concurrent.*
+import org.kohsuke.github.*
+import org.eclipse.jgit.api.Git
+
 buildscript {
 	repositories {
 		jcenter()
@@ -9,7 +13,7 @@ buildscript {
 }
 
 task wrapper(type: Wrapper) {
-		gradleVersion = '2.12'
+	gradleVersion = '2.12'
 }
 
 subprojects {
@@ -43,19 +47,19 @@ subprojects {
 	task exportDependencies (type: Copy){
 		if (project.name.startsWith("Plugin ")) {
 			dependsOn build
-			File directory = new File(projectDir.getParentFile(), "export/plugins/"+ project.name.replaceFirst("Plugin ", "")+"/lib/")
+			File directory = new File(projectDir.parentFile, "export/plugins/${project.name.replaceFirst("Plugin ", "")}/lib/")
 			into directory
-			from (configurations.runtime - project(":Core").configurations.runtime).exclude project(":Core").jar.outputs.files.getFiles().collect {it.getName()}
+			from (configurations.runtime - project(":Core").configurations.runtime).exclude project(":Core").jar.outputs.files.files*.name
 		}
 	}
 	
 	task exportJar (type: Copy){
 		if (project.name.startsWith("Plugin ")) {
 			dependsOn build, exportDependencies
-			File directory = new File(projectDir.getParentFile(), "export/plugins/"+ project.name.replaceFirst("Plugin ", ""))
+			File directory = new File(projectDir.parentFile, "export/plugins/${project.name.replaceFirst("Plugin ", "")}")
 			new File(directory, "Plugin.jar").delete()
 			into directory
-			from (project.jar.outputs.files.getFiles()) {
+			from (project.jar.outputs.files.files) {
 				rename {"Plugin.jar"}
 			}
 		}
@@ -74,65 +78,56 @@ task export() {
 
 
 task setupWorkspace << {
-	java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newCachedThreadPool();
+	ExecutorService executor = Executors.newCachedThreadPool()
 
 	println "Searching for Core and JDA..."
-	File core = new File("Core");
+	File core = new File("Core")
 	if (!core.exists()||core.listFiles().size()==1) {
-		executor.submit(cloneRepository("git://github.com/Java-Discord-Bot-System/Core.git",core));
+		executor.submit(cloneRepository("git://github.com/Java-Discord-Bot-System/Core.git",core))
 	}
-	File jda = new File("JDA");
+	File jda = new File("JDA")
 	if (!jda.exists()||jda.listFiles().size()==1) {
-		executor.submit(cloneRepository("git://github.com/Java-Discord-Bot-System/JDA.git",jda));
+		executor.submit(cloneRepository("git://github.com/Java-Discord-Bot-System/JDA.git",jda))
 	}
 
-	boolean downloadPlugins = Boolean.valueOf(downloadPluginsProp)
-	if (downloadPlugins) {
+	if (downloadPluginsProp as boolean) {
 		println "Searching for plugins..."
-		org.kohsuke.github.GitHub github = org.kohsuke.github.GitHub.connectAnonymously();
-		org.kohsuke.github.GHOrganization organization = github.getOrganization("Java-Discord-Bot-System");
-		Map<String, org.kohsuke.github.GHRepository> repos = organization.getRepositories();
-		for (java.util.Map.Entry<String, org.kohsuke.github.GHRepository> repo : repos.entrySet()) {
-			if (repo.getKey().startsWith("Plugin-")) {
-				File file = new File(repo.getKey().replace("-", " "));
+		GitHub.connectAnonymously().getOrganization("Java-Discord-Bot-System").repositories().each { String k, GHRepository v ->
+			if (k.startsWith("Plugin-")) {
 				if(!file.exists()||file.listFiles().size()==1) {
-					executor.submit(cloneRepository(repo.getValue().getGitTransportUrl().toString(), file));
+					executor.submit(cloneRepository(v.gitTransportUrl.toString(), new File(k.replace("-", " "))))
 				}
 			}
 		}
 	}
 
-	boolean downloadTemplate = Boolean.valueOf(downloadTemplateProp)
-	if (downloadTemplate) {
+	if (downloadTemplateProp as boolean) {
 		println "Searching for template..."
-		File file = new File("Template");
+		File file = new File("Template")
 		if (!file.exists()||file.listFiles().size()==1) {
-			executor.submit(cloneRepository("git://github.com/Java-Discord-Bot-System/Template.git", file));
+			executor.submit(cloneRepository("git://github.com/Java-Discord-Bot-System/Template.git", file))
 		}
 	}
 
-	executor.shutdown();
+	executor.shutdown()
 
 	try {
 		println "Waiting for all downloads to be finished. This can need some time!"
-		executor.awaitTermination(10, java.util.concurrent.TimeUnit.MINUTES);
+		executor.awaitTermination(10, TimeUnit.MINUTES)
 	} catch (InterruptedException e) {
 		println "Downloading needed waaay too long (over 10 minutes)"
 		println "Cancelling..."
 	}
 }
 
-public static Runnable cloneRepository(String url, File directory){
-	println "Downloading "+directory.getName() +"..."
-	return new Runnable() {
-			@Override
-			public void run() {
-				directory.delete();
-				try {
-					org.eclipse.jgit.api.Git.cloneRepository().setDirectory(directory).setURI(url).call().getRepository().close()
-				} catch (org.eclipse.jgit.api.errors.GitAPIException e) {
-					e.printStackTrace();
-				}
-			}
-	}
+Runnable cloneRepository(String url, File directory){
+	println "Downloading ${directory.name}..."
+	return {
+		directory.delete()
+		try {
+			Git.cloneRepository().with { directory = directory; URI = url; delegate}.call().repository.close()
+		} catch (org.eclipse.jgit.api.errors.GitAPIException e) {
+			e.printStackTrace()
+		}
+	} as Runnable
 }
